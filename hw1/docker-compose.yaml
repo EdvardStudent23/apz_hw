@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  facade-service:
+    build: ./facade-service
+    ports: ["8080:8000"] 
+  logging-service:
+    build: ./logging-service
+  counter-service:
+    build: ./counter-service
