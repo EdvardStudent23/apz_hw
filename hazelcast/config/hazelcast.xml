@@ -1,0 +1,25 @@
+<hazelcast xmlns="http://www.hazelcast.com/schema/config">
+    <cluster-name>dev</cluster-name>
+    
+    <network>
+        <join>
+            <multicast enabled="false"/>
+            <tcp-ip enabled="true">
+                <member-list>
+                    <member>hz1</member>
+                    <member>hz2</member>
+                    <member>hz3</member>
+                </member-list>
+            </tcp-ip>
+        </join>
+    </network>
+
+    <queue name="bounded-queue">
+        <max-size>10</max-size>
+        <backup-count>1</backup-count>
+    </queue>
+    
+    <map name="capitals">
+        <backup-count>1</backup-count>
+    </map>
+</hazelcast>
