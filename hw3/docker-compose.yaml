@@ -1,0 +1,48 @@
+version: '3.8'
+services:
+  hz1:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+  hz2:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5702:5701"
+  hz3:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5703:5701"
+  
+  mongo_db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
+  logging-1:
+    build: ./logging-service
+    environment:
+      - PORT=8001
+    
+  logging-2:
+    build: ./logging-service
+    environment:
+      - PORT=8002
+
+  logging-3:
+    build: ./logging-service
+    environment:
+      - PORT=8003
+
+  counter-service:
+    build: ./counter-service
+    depends_on:
+      - mongo_db
+  facade-service:
+    build: ./facade-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      - logging-1
+      - logging-2
+      - logging-3
+      - counter-service
