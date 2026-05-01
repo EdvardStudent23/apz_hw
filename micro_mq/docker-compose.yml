@@ -1,0 +1,112 @@
+version: "3.8"
+
+services:
+
+  # Hazelcast cluster
+  hz1:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5701:5701"
+
+  hz2:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5702:5701"
+
+  hz3:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5703:5701"
+
+  #  MongoDB
+  mongo_db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
+  # Config server 
+  config-server:
+    build: ./config-server
+    ports:
+      - "9000:9000"
+    restart: on-failure
+
+  #  Logging service 
+  logging-1:
+    build: ./logging-service
+    environment:
+      CONFIG_SERVER_URL: http://config-server:9000
+      MY_URL: http://logging-1:8000
+      HZ_MEMBERS: hz1:5701,hz2:5701,hz3:5701
+    depends_on:
+      - config-server
+      - hz1
+      - hz2
+      - hz3
+    restart: on-failure
+
+  logging-2:
+    build: ./logging-service
+    environment:
+      CONFIG_SERVER_URL: http://config-server:9000
+      MY_URL: http://logging-2:8000
+      HZ_MEMBERS: hz1:5701,hz2:5701,hz3:5701
+    depends_on:
+      - config-server
+      - hz1
+      - hz2
+      - hz3
+    restart: on-failure
+
+  logging-3:
+    build: ./logging-service
+    environment:
+      CONFIG_SERVER_URL: http://config-server:9000
+      MY_URL: http://logging-3:8000
+      HZ_MEMBERS: hz1:5701,hz2:5701,hz3:5701
+    depends_on:
+      - config-server
+      - hz1
+      - hz2
+      - hz3
+    restart: on-failure
+
+  # Counter service
+  counter-service:
+    build: ./counter-service
+    environment:
+      CONFIG_SERVER_URL: http://config-server:9000
+      MY_URL: http://counter-service:8000
+      HZ_MEMBERS: hz1:5701,hz2:5701,hz3:5701
+      MONGO_URI: mongodb://mongo_db:27017
+    ports:
+      - "8001:8000"
+    depends_on:
+      - config-server
+      - mongo_db
+      - hz1
+      - hz2
+      - hz3
+    restart: on-failure
+
+  # Facade service
+  facade-service:
+    build: ./facade-service
+    environment:
+      CONFIG_SERVER_URL: http://config-server:9000
+      MY_URL: http://facade-service:8000
+      HZ_MEMBERS: hz1:5701,hz2:5701,hz3:5701
+    ports:
+      - "8000:8000"
+    depends_on:
+      - config-server
+      - hz1
+      - hz2
+      - hz3
+    restart: on-failure
