@@ -1,0 +1,197 @@
+version: "3.8"
+
+services:
+
+  # ─────────────────────────────────────────
+  # CONSUL — замінює config-server
+  # Service Registry + Service Discovery + KV Config
+  # ─────────────────────────────────────────
+  consul:
+    image: hashicorp/consul:1.17
+    container_name: consul
+    ports:
+      - "8500:8500"    # UI + HTTP API
+      - "8600:8600/udp"
+    command: "agent -server -bootstrap -ui -client=0.0.0.0 -bind=0.0.0.0"
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────
+  # CONSUL INIT — завантажує KV конфіги
+  # (адреси Hazelcast, назва черги, тощо)
+  # ─────────────────────────────────────────
+  consul-init:
+    image: hashicorp/consul:1.17
+    container_name: consul-init
+    depends_on:
+      consul:
+        condition: service_healthy
+    volumes:
+      - ./consul-init:/consul-init
+    entrypoint: ["sh", "/consul-init/init.sh"]
+
+  # ─────────────────────────────────────────
+  # HAZELCAST CLUSTER (3 ноди)
+  # ─────────────────────────────────────────
+  hz1:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5701:5701"
+
+  hz2:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5702:5701"
+
+  hz3:
+    image: hazelcast/hazelcast:5.3
+    environment:
+      HZ_CLUSTERNAME: dev
+    ports:
+      - "5703:5701"
+
+  # ─────────────────────────────────────────
+  # MONGODB — для counter-service (баланси)
+  # ─────────────────────────────────────────
+  mongo_db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
+  # ─────────────────────────────────────────
+  # LOGGING SERVICE (3 екземпляри)
+  # Hazelcast config читається з Consul KV
+  # ─────────────────────────────────────────
+  logging-1:
+    build: ./logging-service
+    container_name: logging-1
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://logging-1:8000
+      SERVICE_NAME: logging-service
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  logging-2:
+    build: ./logging-service
+    container_name: logging-2
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://logging-2:8000
+      SERVICE_NAME: logging-service
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  logging-3:
+    build: ./logging-service
+    container_name: logging-3
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://logging-3:8000
+      SERVICE_NAME: logging-service
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  # ─────────────────────────────────────────
+  # COUNTER SERVICE (2 екземпляри)
+  # MQ config читається з Consul KV
+  # ─────────────────────────────────────────
+  counter-service-1:
+    build: ./counter-service
+    container_name: counter-service-1
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://counter-service-1:8000
+      SERVICE_NAME: counter-service
+      MONGO_URI: mongodb://mongo_db:27017
+    ports:
+      - "8001:8000"
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      mongo_db:
+        condition: service_started
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  counter-service-2:
+    build: ./counter-service
+    container_name: counter-service-2
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://counter-service-2:8000
+      SERVICE_NAME: counter-service
+      MONGO_URI: mongodb://mongo_db:27017
+    ports:
+      - "8002:8000"
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      mongo_db:
+        condition: service_started
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  # ─────────────────────────────────────────
+  # FACADE SERVICE (2 екземпляри)
+  # Адреси logging/counter — з Consul Discovery
+  # ─────────────────────────────────────────
+  facade-service-1:
+    build: ./facade-service
+    container_name: facade-service-1
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://facade-service-1:8000
+      SERVICE_NAME: facade-service
+    ports:
+      - "8000:8000"
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      hz1:
+        condition: service_started
+    restart: on-failure
+
+  facade-service-2:
+    build: ./facade-service
+    container_name: facade-service-2
+    environment:
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      MY_URL: http://facade-service-2:8000
+      SERVICE_NAME: facade-service
+    ports:
+      - "8003:8000"
+    depends_on:
+      consul-init:
+        condition: service_completed_successfully
+      hz1:
+        condition: service_started
+    restart: on-failure
